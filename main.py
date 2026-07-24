@@ -1,122 +1,122 @@
-import tkinter as tk
-from tkinter import filedialog, messagebox
-import pygame
+from kivy.app import App
+from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.gridlayout import GridLayout
+from kivy.uix.label import Label
+from kivy.uix.button import Button
+from kivy.uix.filechooser import FileChooserListView
+from kivy.uix.popup import Popup
+from kivy.uix.scrollview import ScrollView
+from kivy.uix.listview import ListView, ListItemButton
+from kivy.adapters.listadapter import ListAdapter
+from kivy.core.audio import SoundLoader
 import os
-from pathlib import Path
 
-class M3UPlayer:
-    def __init__(self, root):
-        self.root = root
-        self.root.title("M3U Player")
-        self.root.geometry("600x400")
-        self.root.resizable(False, False)
-        
-        # Initialize pygame mixer
-        pygame.mixer.init()
-        
-        # Variables
+class M3UPlayerApp(App):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
         self.playlist = []
         self.current_index = 0
         self.is_playing = False
-        self.current_file = None
+        self.current_sound = None
+        self.track_label = None
+        self.playlist_listview = None
         
-        # UI Setup
-        self.setup_ui()
+    def build(self):
+        main_layout = BoxLayout(orientation='vertical', padding=10, spacing=10)
         
-    def setup_ui(self):
-        """Create the UI components"""
-        # Title Label
-        title_label = tk.Label(
-            self.root, 
-            text="M3U Player", 
-            font=("Arial", 24, "bold"),
-            pady=10
+        # Title
+        title = Label(
+            text='M3U Player',
+            size_hint_y=0.1,
+            font_size='24sp',
+            bold=True
         )
-        title_label.pack()
+        main_layout.add_widget(title)
         
-        # Current Track Label
-        self.track_label = tk.Label(
-            self.root,
-            text="No track loaded",
-            font=("Arial", 12),
-            fg="blue",
-            wraplength=550,
-            pady=10
+        # Current Track Display
+        self.track_label = Label(
+            text='No track loaded',
+            size_hint_y=0.1,
+            font_size='14sp',
+            color=(0, 0, 1, 1)
         )
-        self.track_label.pack()
+        main_layout.add_widget(self.track_label)
         
-        # Playlist Frame
-        playlist_frame = tk.Frame(self.root)
-        playlist_frame.pack(pady=10, fill=tk.BOTH, expand=True, padx=10)
-        
-        playlist_label = tk.Label(playlist_frame, text="Playlist:", font=("Arial", 10, "bold"))
-        playlist_label.pack(anchor="w")
-        
-        # Listbox with Scrollbar
-        scrollbar = tk.Scrollbar(playlist_frame)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        self.playlist_listbox = tk.Listbox(
-            playlist_frame,
-            yscrollcommand=scrollbar.set,
-            font=("Arial", 10),
-            height=10
+        # Playlist Display
+        playlist_label = Label(
+            text='Playlist:',
+            size_hint_y=0.05,
+            font_size='12sp'
         )
-        self.playlist_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.config(command=self.playlist_listbox.yview)
+        main_layout.add_widget(playlist_label)
         
-        # Control Buttons Frame
-        control_frame = tk.Frame(self.root)
-        control_frame.pack(pady=15)
-        
-        self.load_btn = tk.Button(
-            control_frame,
-            text="Load M3U",
-            command=self.load_m3u,
-            width=12,
-            font=("Arial", 10)
+        # ScrollView for playlist
+        scroll_view = ScrollView(size_hint=(1, 0.5))
+        self.playlist_listview = ListView(
+            adapter=None,
+            size_hint_y=None
         )
-        self.load_btn.grid(row=0, column=0, padx=5)
+        scroll_view.add_widget(self.playlist_listview)
+        main_layout.add_widget(scroll_view)
         
-        self.play_btn = tk.Button(
-            control_frame,
-            text="Play",
-            command=self.play,
-            width=12,
-            font=("Arial", 10)
+        # Control Buttons
+        button_layout = GridLayout(cols=4, size_hint_y=0.2, spacing=5)
+        
+        load_btn = Button(text='Load M3U', size_hint_x=0.25)
+        load_btn.bind(on_press=self.load_m3u)
+        button_layout.add_widget(load_btn)
+        
+        play_btn = Button(text='Play', size_hint_x=0.25)
+        play_btn.bind(on_press=self.play)
+        button_layout.add_widget(play_btn)
+        
+        pause_btn = Button(text='Pause', size_hint_x=0.25)
+        pause_btn.bind(on_press=self.pause)
+        button_layout.add_widget(pause_btn)
+        
+        stop_btn = Button(text='Stop', size_hint_x=0.25)
+        stop_btn.bind(on_press=self.stop)
+        button_layout.add_widget(stop_btn)
+        
+        main_layout.add_widget(button_layout)
+        
+        return main_layout
+    
+    def load_m3u(self, instance):
+        """Load M3U file"""
+        content = BoxLayout(orientation='vertical')
+        file_chooser = FileChooserListView(
+            filters=['*.m3u']
         )
-        self.play_btn.grid(row=0, column=1, padx=5)
+        content.add_widget(file_chooser)
         
-        self.pause_btn = tk.Button(
-            control_frame,
-            text="Pause",
-            command=self.pause,
-            width=12,
-            font=("Arial", 10)
+        btn_layout = BoxLayout(size_hint_y=0.1, spacing=10)
+        
+        def select_file(path, filename):
+            if filename:
+                self.parse_m3u(os.path.join(path, filename[0]))
+                popup.dismiss()
+        
+        select_btn = Button(text='Select')
+        select_btn.bind(on_press=lambda x: select_file(file_chooser.path, file_chooser.selection))
+        btn_layout.add_widget(select_btn)
+        
+        cancel_btn = Button(text='Cancel')
+        cancel_btn.bind(on_press=lambda x: popup.dismiss())
+        btn_layout.add_widget(cancel_btn)
+        
+        content.add_widget(btn_layout)
+        
+        popup = Popup(
+            title='Load M3U File',
+            content=content,
+            size_hint=(0.9, 0.9)
         )
-        self.pause_btn.grid(row=0, column=2, padx=5)
-        
-        self.stop_btn = tk.Button(
-            control_frame,
-            text="Stop",
-            command=self.stop,
-            width=12,
-            font=("Arial", 10)
-        )
-        self.stop_btn.grid(row=0, column=3, padx=5)
-        
-    def load_m3u(self):
-        """Load M3U file and parse playlist"""
-        file_path = filedialog.askopenfilename(
-            title="Select M3U file",
-            filetypes=[("M3U files", "*.m3u"), ("All files", "*.*")]
-        )
-        
-        if not file_path:
-            return
-        
+        popup.open()
+    
+    def parse_m3u(self, file_path):
+        """Parse M3U file and load tracks"""
         self.playlist = []
-        self.playlist_listbox.delete(0, tk.END)
         
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
@@ -127,66 +127,73 @@ class M3UPlayer:
             for line in lines:
                 line = line.strip()
                 if line and not line.startswith('#'):
-                    # Handle relative and absolute paths
                     if os.path.isabs(line):
                         track_path = line
                     else:
                         track_path = os.path.join(playlist_dir, line)
                     
                     if os.path.exists(track_path):
-                        track_name = os.path.basename(track_path)
                         self.playlist.append(track_path)
-                        self.playlist_listbox.insert(tk.END, track_name)
             
-            if self.playlist:
-                messagebox.showinfo("Success", f"Loaded {len(self.playlist)} tracks")
-                self.current_index = 0
-            else:
-                messagebox.showwarning("Warning", "No valid tracks found in M3U file")
-                
+            self.update_playlist_display()
+            self.track_label.text = f'Loaded {len(self.playlist)} tracks'
+            
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to load M3U file:\n{str(e)}")
+            self.track_label.text = f'Error: {str(e)}'
     
-    def play(self):
-        """Play the selected track"""
+    def update_playlist_display(self):
+        """Update the playlist listview"""
+        track_names = [os.path.basename(track) for track in self.playlist]
+        
+        adapter = ListAdapter(
+            data=track_names,
+            cls=ListItemButton,
+            selection_mode='single',
+            allow_empty_selection=False
+        )
+        
+        self.playlist_listview.adapter = adapter
+    
+    def play(self, instance):
+        """Play current track"""
         if not self.playlist:
-            messagebox.showwarning("Warning", "Please load an M3U file first")
+            self.track_label.text = 'Please load an M3U file first'
             return
         
         try:
-            if not self.is_playing:
-                track_path = self.playlist[self.current_index]
-                pygame.mixer.music.load(track_path)
-                pygame.mixer.music.play()
+            if self.current_sound:
+                self.current_sound.stop()
+            
+            track_path = self.playlist[self.current_index]
+            self.current_sound = SoundLoader.load(track_path)
+            
+            if self.current_sound:
+                self.current_sound.play()
                 self.is_playing = True
-                
                 track_name = os.path.basename(track_path)
-                self.track_label.config(text=f"Now Playing: {track_name}")
-                self.playlist_listbox.selection_clear(0, tk.END)
-                self.playlist_listbox.selection_set(self.current_index)
-                self.playlist_listbox.see(self.current_index)
+                self.track_label.text = f'Now Playing: {track_name}'
             else:
-                pygame.mixer.music.unpause()
+                self.track_label.text = 'Failed to load audio'
                 
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to play track:\n{str(e)}")
+            self.track_label.text = f'Error: {str(e)}'
     
-    def pause(self):
-        """Pause the current track"""
-        if self.is_playing:
-            pygame.mixer.music.pause()
+    def pause(self, instance):
+        """Pause playback"""
+        if self.current_sound and self.is_playing:
+            if self.current_sound.state == 'play':
+                self.current_sound.stop()
+                self.track_label.text = 'Paused'
+            else:
+                self.current_sound.play()
+                self.track_label.text = 'Resumed'
     
-    def stop(self):
+    def stop(self, instance):
         """Stop playback"""
-        pygame.mixer.music.stop()
-        self.is_playing = False
-        self.track_label.config(text="No track loaded")
-        self.playlist_listbox.selection_clear(0, tk.END)
+        if self.current_sound:
+            self.current_sound.stop()
+            self.is_playing = False
+            self.track_label.text = 'Stopped'
 
-def main():
-    root = tk.Tk()
-    app = M3UPlayer(root)
-    root.mainloop()
-
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    M3UPlayerApp().run()
